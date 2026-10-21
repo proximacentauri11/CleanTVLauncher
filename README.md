@@ -55,7 +55,7 @@ YouTube-рекламу не блокирует.
 1. На стике: Настройки -> Аккаунты и безопасность -> Отладка по ADB -> выключить
 2. Там же: Revoke USB debugging authorizations
 3. Перезагрузить стик
-4. На ПК: Test-NetConnection 10.48.219.58 -Port 5555 -> TcpTestSucceeded = False
+4. На ПК: Test-NetConnection "ВАШ ЛОКАЛЬНЫЙ IP" -Port 5555 -> TcpTestSucceeded = False
 
 ## Известные ограничения
 - Сборка под armeabi-v7a (32-бит), как у стика
