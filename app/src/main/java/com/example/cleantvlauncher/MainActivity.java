@@ -3,6 +3,7 @@ package com.example.cleantvlauncher;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
@@ -40,6 +41,9 @@ public class MainActivity extends Activity {
     };
 
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private SharedPreferences prefs;
+    private static final String PREFS_NAME = "launcher_prefs";
+    private static final String KEY_HIDDEN = "hidden_apps";
     private TextView clock, date, greeting, focusTitle, forFun;
     private RecyclerView dock, grid;
     private AppAdapter dockAdapter, gridAdapter;
@@ -57,6 +61,7 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(
                 View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                         | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         setContentView(buildLayout());
         loadApps();
         handler.post(clockTick);
@@ -175,6 +180,8 @@ public class MainActivity extends Activity {
         for (ResolveInfo ri : resolved) {
             String pkg = ri.activityInfo.packageName;
             if (pkg.equals(getPackageName())) continue;
+            java.util.Set<String> hidden = prefs.getStringSet(KEY_HIDDEN, new java.util.HashSet<>());
+            if (hidden.contains(pkg)) continue;
             if (!seen.add(pkg)) continue;
             String label = ri.loadLabel(pm).toString();
             Drawable icon = ri.loadIcon(pm);
@@ -189,6 +196,12 @@ public class MainActivity extends Activity {
         }
         for (AppInfo a : allApps) if (!dockApps.contains(a)) gridApps.add(a);
 
+        // Добавляем кнопку "+" в док
+        try {
+            android.graphics.drawable.Drawable plusIcon = getResources().getDrawable(android.R.drawable.ic_input_add);
+            dockApps.add(new AppInfo("Добавить", "__add__", plusIcon, ""));
+        } catch (Exception ignored) { }
+
         dockAdapter = new AppAdapter(this, dockApps, true, this::launchApp,
                 info -> { focusTitle.setText(info.label); focusTitle.setAlpha(0.9f); });
         dock.setAdapter(dockAdapter);
@@ -200,6 +213,7 @@ public class MainActivity extends Activity {
                 dock.getChildAt(0).requestFocus();
             }
         });
+        gridAdapter.setOnAppLongClickListener(this::showHideDialog);
         grid.setAdapter(gridAdapter);
 
         grid.post(() -> {
@@ -208,7 +222,48 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void showHiddenAppsDialog() {
+        Set<String> hidden = prefs.getStringSet(KEY_HIDDEN, new HashSet<>());
+        if (hidden.isEmpty()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Нет скрытых приложений")
+                    .setPositiveButton("OK", null)
+                    .show();
+            return;
+        }
+        final String[] items = hidden.toArray(new String[0]);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Вернуть приложение")
+                .setItems(items, (d, which) -> {
+                    String pkg = items[which];
+                    Set<String> updated = new HashSet<>(hidden);
+                    updated.remove(pkg);
+                    prefs.edit().putStringSet(KEY_HIDDEN, updated).apply();
+                    loadApps();
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void showHideDialog(AppInfo info) {
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Скрыть приложение?")
+                .setMessage(info.label)
+                .setPositiveButton("Скрыть", (d, w) -> {
+                    java.util.Set<String> hidden = new java.util.HashSet<>(prefs.getStringSet(KEY_HIDDEN, new java.util.HashSet<>()));
+                    hidden.add(info.packageName);
+                    prefs.edit().putStringSet(KEY_HIDDEN, hidden).apply();
+                    loadApps();
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
     private void launchApp(AppInfo info) {
+        if (info.packageName.equals("__add__")) {
+            showHiddenAppsDialog();
+            return;
+        }
         Intent i = new Intent(Intent.ACTION_MAIN);
         i.addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER);
         i.setComponent(new ComponentName(info.packageName, info.activityName));

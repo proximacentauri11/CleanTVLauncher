@@ -18,6 +18,9 @@ import java.util.List;
 public class AppAdapter extends RecyclerView.Adapter<AppAdapter.VH> {
 
     public interface OnAppClickListener { void onAppClick(AppInfo info); }
+    public interface OnAppLongClickListener { void onAppLongClick(AppInfo info); }
+    private OnAppLongClickListener longClickListener;
+    public void setOnAppLongClickListener(OnAppLongClickListener l) { this.longClickListener = l; }
     public interface RunnableLike { void run(); }
     private RunnableLike dockFocusRequester;
     public void setDockFocusRequester(RunnableLike r) { this.dockFocusRequester = r; }
@@ -93,18 +96,23 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.VH> {
             if (clickListener != null) clickListener.onAppClick(info);
         });
         if (!isDock) {
-            holder.itemView.setOnKeyListener((v, keyCode, event) -> {
-                if (event.getAction() == android.view.KeyEvent.ACTION_DOWN
-                        && keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN) {
-                    // Вниз с верхнего ряда -> док; с остальных -> обычная прокрутка
-                    if (position >= 0 && position < 4 && dockFocusRequester != null) {
-                        dockFocusRequester.run();
-                        return true;
                     }
+        holder.itemView.setOnKeyListener((v, keyCode, event) -> {
+            if (event.getAction() == android.view.KeyEvent.ACTION_DOWN) {
+                if ((keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER
+                        || keyCode == android.view.KeyEvent.KEYCODE_ENTER)
+                        && (event.isLongPress() || event.getRepeatCount() > 10)) {
+                    if (longClickListener != null) longClickListener.onAppLongClick(info);
+                    return true;
                 }
-                return false;
-            });
-        }
+                if (keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN
+                        && position >= 0 && position < 4 && dockFocusRequester != null) {
+                    dockFocusRequester.run();
+                    return true;
+                }
+            }
+            return false;
+        });
         holder.itemView.setOnFocusChangeListener((v, hasFocus) -> {
             v.animate().scaleX(hasFocus ? 1.08f : 1f).scaleY(hasFocus ? 1.08f : 1f)
                     .setDuration(140).start();
