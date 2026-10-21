@@ -6,7 +6,7 @@
 
 ## Что сделано
 
-### Дебloat (pm disable-user --user 0)
+### Деблоат (pm disable-user --user 0)
 - Телеметрия Xiaomi: com.miui.tv.analytics, com.xiaomi.statistic
 - PatchWall: com.mitv.tvhome.atv, com.mitv.tvhome.mitvplus, com.mitv.tvhome.michannel
 - Miracast/каст: com.xiaomi.mitv.smartshare
