@@ -29,6 +29,13 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+
+import org.json.JSONObject;
+
 import java.util.Set;
 
 public class MainActivity extends Activity {
@@ -44,7 +51,7 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private static final String PREFS_NAME = "launcher_prefs";
     private static final String KEY_HIDDEN = "hidden_apps";
-    private TextView clock, date, greeting, focusTitle, forFun;
+    private TextView clock, date, greeting, focusTitle, forFun, weatherText;
     private RecyclerView dock, grid;
     private AppAdapter dockAdapter, gridAdapter;
     private final List<AppInfo> allApps = new ArrayList<>();
@@ -52,7 +59,11 @@ public class MainActivity extends Activity {
     private final List<AppInfo> gridApps = new ArrayList<>();
 
     private final Runnable clockTick = new Runnable() {
-        @Override public void run() { updateClock(); handler.postDelayed(this, 30_000); }
+        @Override
+        public void run() {
+            updateClock();
+            handler.postDelayed(this, 30_000);
+        }
     };
 
     @Override
@@ -63,30 +74,36 @@ public class MainActivity extends Activity {
                         | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         setContentView(buildLayout());
+        fetchWeather();
         loadApps();
         handler.post(clockTick);
     }
 
     @Override
-    protected void onDestroy() { handler.removeCallbacks(clockTick); super.onDestroy(); }
+    protected void onDestroy() {
+        handler.removeCallbacks(clockTick);
+        super.onDestroy();
+    }
 
     private View buildLayout() {
         FrameLayout root = new FrameLayout(this);
         //root.setBackgroundColor(Color.BLACK);
-        root.setBackgroundResource(R.drawable.kittens);
+        root.setBackgroundResource(R.drawable.raskaif);
 
         LinearLayout topLeft = new LinearLayout(this);
         topLeft.setOrientation(LinearLayout.VERTICAL);
         FrameLayout.LayoutParams tlLp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tlLp.leftMargin = dp(30); tlLp.topMargin = dp(30);
+        tlLp.leftMargin = dp(30);
+        tlLp.topMargin = dp(30);
         topLeft.setLayoutParams(tlLp);
 
         LinearLayout topRight = new LinearLayout(this);
         topRight.setOrientation(LinearLayout.VERTICAL);
         FrameLayout.LayoutParams tlRp = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        tlRp.rightMargin = dp(30); tlRp.topMargin = dp(30);
+        tlRp.rightMargin = dp(30);
+        tlRp.topMargin = dp(30);
         tlRp.gravity = Gravity.TOP | Gravity.END;
         topRight.setLayoutParams(tlRp);
 
@@ -109,6 +126,11 @@ public class MainActivity extends Activity {
         clock.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         clock.setTextSize(64f);
         topLeft.addView(clock);
+
+        weatherText = new TextView(this);
+        weatherText.setTextColor(Color.BLACK);
+        weatherText.setTextSize(14f);
+        topLeft.addView(weatherText);
 
         date = new TextView(this);
         date.setTextColor(Color.BLACK);
@@ -157,6 +179,7 @@ public class MainActivity extends Activity {
 
         return root;
     }
+
     private void updateClock() {
         SimpleDateFormat tf = new SimpleDateFormat("HH:mm", Locale.getDefault());
         SimpleDateFormat df = new SimpleDateFormat("EEEE, d MMMM", new Locale("ru"));
@@ -188,10 +211,14 @@ public class MainActivity extends Activity {
             allApps.add(new AppInfo(label, pkg, icon, ri.activityInfo.name));
         }
 
-        dockApps.clear(); gridApps.clear();
+        dockApps.clear();
+        gridApps.clear();
         for (String p : DOCK_PACKAGES) {
             for (AppInfo a : allApps) {
-                if (a.packageName.equals(p)) { dockApps.add(a); break; }
+                if (a.packageName.equals(p)) {
+                    dockApps.add(a);
+                    break;
+                }
             }
         }
         for (AppInfo a : allApps) if (!dockApps.contains(a)) gridApps.add(a);
@@ -200,10 +227,14 @@ public class MainActivity extends Activity {
         try {
             android.graphics.drawable.Drawable plusIcon = getResources().getDrawable(android.R.drawable.ic_input_add);
             dockApps.add(new AppInfo("Добавить", "__add__", plusIcon, ""));
-        } catch (Exception ignored) { }
+        } catch (Exception ignored) {
+        }
 
         dockAdapter = new AppAdapter(this, dockApps, true, this::launchApp,
-                info -> { focusTitle.setText(info.label); focusTitle.setAlpha(0.9f); });
+                info -> {
+                    focusTitle.setText(info.label);
+                    focusTitle.setAlpha(0.9f);
+                });
         dock.setAdapter(dockAdapter);
 
         gridAdapter = new AppAdapter(this, gridApps, false, this::launchApp,
@@ -257,6 +288,36 @@ public class MainActivity extends Activity {
                 })
                 .setNegativeButton("Отмена", null)
                 .show();
+    }
+
+    private void fetchWeather() {
+        new Thread(() -> {
+            try {
+                // format=3: короткая строка "Город: ⛅️ +11°C", отвечает быстро
+                String urlStr = "https://wttr.in/55.506954,36.016972?format=%c+%t&lang=ru";
+                URL url = new URL(urlStr);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(10000);
+                conn.setReadTimeout(10000);
+                conn.setRequestProperty("User-Agent", "curl/7.68.0");
+
+                BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                String text = reader.readLine();
+                reader.close();
+                conn.disconnect();
+
+                if (text != null && !text.isEmpty()) {
+                    final String finalText = "Можайск: " + text;
+                    runOnUiThread(() -> weatherText.setText(finalText));
+                } else {
+                    runOnUiThread(() -> weatherText.setText("—"));
+                }
+            } catch (Exception e) {
+                android.util.Log.e("WEATHER", "fetch failed", e);
+                runOnUiThread(() -> weatherText.setText("—"));
+            }
+        }).start();
     }
 
     private void launchApp(AppInfo info) {

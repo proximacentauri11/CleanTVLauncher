@@ -127,7 +127,9 @@ public class AppAdapter extends RecyclerView.Adapter<AppAdapter.VH> {
 
 
     @Override
-    public int getItemCount() { return items.size(); }
+    public int getItemCount() {
+        return items.size();
+    }
 
     private int dp(int v) {
         return Math.round(v * context.getResources().getDisplayMetrics().density);
